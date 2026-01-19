@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WordWeaver</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        #game-board {
+            display: grid;
+            gap: 5px;
+            margin: 20px 0;
+        }
+        .letter-box {
+            width: 50px;
+            height: 50px;
+            border: 1px solid #ccc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+        }
+        .correct {
+            background-color: green;
+            color: white;
+        }
+        .misplaced {
+            background-color: yellow;
+            color: black;
+        }
+        .wrong {
+            background-color: gray;
+            color: white;
+        }
+        .input-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        input[type="text"] {
+            width: 300px;
+            padding: 5px;
+        }
+        button {
+            width: 130px;
+            padding: 5px;
+        }
+        .slider-container {
+            display: flex;
+            justify-content: space-between;
+            width: 400px;
+            margin-bottom: 20px;
+        }
+        .slider-label {
+            margin-right: 10px;
+        }
+        #start-game-btn {
+            padding: 5px 10px;
+        }
+        /* Keyboard styles */
+        .keyboard {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        .keyboard-row {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 5px;
+        }
+        .key {
+            width: 45px;
+            height: 45px;
+            background-color: #eaeaea;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            font-size: 18px;
+            transition: background-color 0.3s;
+        }
+        .key:active, .key.pressed {
+            background-color: #666;
+            color: white;
+        }
+        select {
+            margin-top: 20px;
+            padding: 5px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>WordWeaver</h1>
+
+    <div class="slider-container">
+        <div>
+            <label class="slider-label" for="turns-slider">Number of Turns: <span id="turns-display">6</span></label>
+            <input type="range" id="turns-slider" min="1" max="10" value="6">
+        </div>
+        <div>
+            <label class="slider-label" for="length-slider">Word Length: <span id="length-display">5</span></label>
+            <input type="range" id="length-slider" min="3" max="10" value="5">
+        </div>
+    </div>
+
+    <button id="start-game-btn">Start Game</button>
+
+    <div id="game-board">
+        <!-- WordWeaver grid will be generated here -->
+    </div>
+
+    <div class="input-container">
+        <div class="input-group">
+            <input type="text" id="word-input" maxlength="5" placeholder="Enter your guess" />
+            <button id="submit-btn">Submit Guess</button>
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="word-list-input" placeholder="Enter comma-separated word list" />
+            <button id="submit-list-btn">Submit List</button>
+        </div>
+    </div>
+
+    <div class="keyboard">
+        <div class="keyboard-row" id="keyboard-row-1"></div>
+        <div class="keyboard-row" id="keyboard-row-2"></div>
+        <div class="keyboard-row" id="keyboard-row-3"></div>
+    </div>
+
+    <!-- Keyboard layout selector -->
+    <select id="keyboard-selector">
+        <option value="en">English (QWERTY)</option>
+        <option value="es">Spanish (QWERTY with ñ)</option>
+        <option value="fr">French (AZERTY)</option>
+        <option value="ko">Korean</option>
+        <option value="ja">Japanese</option>
+        <option value="zh">Chinese</option>
+        <option value="hi">Hindi</option>
+    </select>
+
+    <script>
+        // Prepopulate word lists for each length (500 words each)
+        const wordLists = {
+            3: ["cat", "dog", "sun", /* ... more 3-letter words */],
+            4: ["tree", "blue", "fish", /* ... more 4-letter words */],
+            5: ["apple", "board", "crane", /* ... more 5-letter words */],
+            6: ["friend", "market", "gather", /* ... more 6-letter words */],
+            7: ["example", "believe", "account", /* ... more 7-letter words */],
+            8: ["computer", "absolute", "interest", /* ... more 8-letter words */],
+            9: ["different", "structure", "attention", /* ... more 9-letter words */],
+            10: ["foundation", "importance", "generation", /* ... more 10-letter words */]
+        };
+
+        let wordList = [];
+        let secretWord = '';
+        let currentGuess = '';
+        let maxGuesses = 6;
+        let wordLength = 5;
+        let guessCount = 0;
+
+        const gameBoard = document.getElementById('game-board');
+        const wordInput = document.getElementById('word-input');
+        const wordListInput = document.getElementById('word-list-input');
+        const message = document.getElementById('message');
+        const turnsSlider = document.getElementById('turns-slider');
+        const lengthSlider = document.getElementById('length-slider');
+        const turnsDisplay = document.getElementById('turns-display');
+        const lengthDisplay = document.getElementById('length-display');
+        const keyboardSelector = document.getElementById('keyboard-selector');
+
+        // Keyboard Layouts
+        const keyboards = {
+            en: [
+                ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+                ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+                ['@E', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Bksp']
+            ],
+            es: [
+                ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+                ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Ñ'],
+                ['@E', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Bksp']
+            ],
+            fr: [
+                ['A', 'Z', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+                ['Q', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'M'],
+                ['@E', 'W', 'X', 'C', 'V', 'B', 'N', 'Bksp']
+            ],
+            ko: [
+                ['ㅂ', 'ㅈ', 'ㄷ', 'ㄱ', 'ㅅ', 'ㅛ', 'ㅕ', 'ㅑ', 'ㅐ', 'ㅔ'],
+                ['ㅁ', 'ㄴ', 'ㅇ', 'ㄹ', 'ㅎ', 'ㅗ', 'ㅓ', 'ㅏ', 'ㅣ'],
+                ['@E', 'ㅋ', 'ㅌ', 'ㅊ', 'ㅍ', 'ㅠ', 'ㅜ', 'ㅡ', 'Bksp']
+            ],
+            ja: [
+                ['あ', 'い', 'う', 'え', 'お', 'か', 'き', 'く', 'け', 'こ'],
+                ['さ', 'し', 'す', 'せ', 'そ', 'た', 'ち', 'つ', 'て', 'と'],
+                ['@E', 'な', 'に', 'ぬ', 'ね', 'の', 'は', 'ひ', 'Bksp']
+            ],
+            zh: [
+                ['我', '你', '他', '她', '它', '的', '是', '不', '了', '在'],
+                ['和', '有', '這', '那', '個', '對', '嗎', '呢', '什', '麼'],
+                ['@E', '也', '都', '很', '要', '以', '沒', '為', 'Bksp']
+            ],
+            hi: [
+                ['अ', 'आ', 'इ', 'ई', 'उ', 'ऊ', 'ए', 'ऐ', 'ओ', 'औ'],
+                ['क', 'ख', 'ग', 'घ', 'च', 'छ', 'ज', 'झ', 'ट', 'ठ'],
+                ['@E', 'ड', 'ढ', 'ण', 'त', 'थ', 'द', 'ध', 'Bksp']
+            ]
+        };
+
+        // Function to render the keyboard
+        function renderKeyboard(layout) {
+            const row1 = document.getElementById('keyboard-row-1');
+            const row2 = document.getElementById('keyboard-row-2');
+            const row3 = document.getElementById('keyboard-row-3');
+
+            // Clear existing keys
+            row1.innerHTML = '';
+            row2.innerHTML = '';
+            row3.innerHTML = '';
+
+            // Create keys for each row
+            layout[0].forEach(key => createKey(row1, key));
+            layout[1].forEach(key => createKey(row2, key));
+            layout[2].forEach(key => createKey(row3, key));
+        }
+
+        // Function to create a key element and append it to the row
+        function createKey(row, key) {
+            const keyElement = document.createElement('div');
+            keyElement.classList.add('key');
+            keyElement.textContent = key;
+
+            // Add click event to key
+            keyElement.addEventListener('click', () => {
+                handleKeyPress(key);
+            });
+
+            row.appendChild(keyElement);
+        }
+
+        // Handle key press
+        function handleKeyPress(key) {
+            if (key === '@E') {
+                // Submit the word (same as pressing "Submit Guess" button)
+                document.getElementById('submit-btn').click();
+            } else if (key === 'Bksp') {
+                // Backspace functionality: remove the last character from the input field
+                wordInput.value = wordInput.value.slice(0, -1);
+            } else {
+                // Add the letter to the input field (guess)
+                wordInput.value += key;
+            }
+        }
+
+        // Change keyboard layout based on the selected language
+        keyboardSelector.addEventListener('change', function() {
+            const selectedLanguage = this.value;
+            renderKeyboard(keyboards[selectedLanguage]);
+        });
+
+        // Render default keyboard on page load
+        renderKeyboard(keyboards['en']); // Render English QWERTY layout by default
+
+        // Update sliders display
+        turnsSlider.addEventListener('input', function() {
+            maxGuesses = parseInt(turnsSlider.value);
+            turnsDisplay.textContent = maxGuesses;
+            adjustBoard();
+        });
+
+        lengthSlider.addEventListener('input', function() {
+            wordLength = parseInt(lengthSlider.value);
+            lengthDisplay.textContent = wordLength;
+            wordInput.maxLength = wordLength;
+            adjustBoard();
+        });
+
+        // Start Game Button
+        document.getElementById('start-game-btn').addEventListener('click', function() {
+            const wordListInputValue = wordListInput.value;
+            if (wordListInputValue.trim() === "") {
+                // Use prepopulated list if no custom word list is provided
+                wordList = wordLists[wordLength];
+            } else {
+                wordList = wordListInputValue.split(',').map(word => word.trim().toLowerCase()).filter(word => word.length === wordLength);
+            }
+
+            if (wordList.length === 0) {
+                alert(`Please enter a valid word list with words of length ${wordLength}!`);
+                return;
+            }
+
+            secretWord = wordList[Math.floor(Math.random() * wordList.length)];
+            resetBoard();
+            message.textContent = '';
+            guessCount = 0;
+            console.log('Secret Word:', secretWord); // For testing purposes
+        });
+
+        // Allow submitting the word list via a button
+        document.getElementById('submit-list-btn').addEventListener('click', function() {
+            wordList = wordListInput.value.split(',').map(word => word.trim().toLowerCase());
+            message.textContent = 'Word list submitted!';
+        });
+
+        // Submit Guess Button
+        document.getElementById('submit-btn').addEventListener('click', function() {
+            currentGuess = wordInput.value.trim().toLowerCase();
+            if (currentGuess.length !== wordLength) {
+                message.textContent = `Please enter a ${wordLength}-letter word!`;
+                return;
+            }
+
+            // No validation for being in word list
+            checkGuess(currentGuess);
+            wordInput.value = '';
+        });
+
+        // Function to reset the board
+        function resetBoard() {
+            gameBoard.innerHTML = '';
+            adjustBoard();
+        }
+
+        // Function to adjust the board based on word length and guesses
+        function adjustBoard() {
+            gameBoard.innerHTML = '';
+            gameBoard.style.gridTemplateColumns = `repeat(${wordLength}, 50px)`;
+            for (let i = 0; i < maxGuesses * wordLength; i++) {
+                const box = document.createElement('div');
+                box.classList.add('letter-box');
+                gameBoard.appendChild(box);
+            }
+        }
+
+        // Function to check the player's guess
+        function checkGuess(guess) {
+            const boxes = document.querySelectorAll('.letter-box');
+            const startIndex = guessCount * wordLength;
+
+            for (let i = 0; i < wordLength; i++) {
+                const letterBox = boxes[startIndex + i];
+                const letter = guess[i];
+
+                if (letter === secretWord[i]) {
+                    letterBox.classList.add('correct');
+                } else if (secretWord.includes(letter)) {
+                    letterBox.classList.add('misplaced');
+                } else {
+                    letterBox.classList.add('wrong');
+                }
+
+                letterBox.textContent = letter.toUpperCase();
+            }
+
+            guessCount++;
+            if (guess === secretWord) {
+                message.textContent = 'Congratulations! You guessed the word!';
+            } else if (guessCount === maxGuesses) {
+                message.textContent = `Game over! The word was: ${secretWord}`;
+            }
+        }
+
+        // Initialize the board for default settings
+        adjustBoard();
+
+    </script>
+
+</body>
+</html>
